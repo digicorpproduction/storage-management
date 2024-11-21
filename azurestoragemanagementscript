@@ -52,26 +52,33 @@ upload_file(local_file_path, remote_file_path)
 download_file(remote_file_path, local_file_path)
 list_files_and_directories(directory_path)
 
-A script is a set of instructions or commands written in a specific programming language that is executed by a computer or interpreter. It is used to automate tasks, perform calculations, manipulate data, or interact with various systems and environments.
+Let's go through the script step by step to understand its functionality:
 
-Let's break down the components and processes involved in a script:
+Importing necessary modules:
 
-1. Programming Language: A script is written in a programming language such as Python, JavaScript, Ruby, or PowerShell. Each programming language has its own syntax and rules for writing scripts.
+os: This module provides a way to use operating system dependent functionality.
+DefaultAzureCredential from azure.identity: This module provides a default credential for authenticating with Azure services.
+DataLakeServiceClient from azure.storage.filedatalake: This module provides the client object to interact with Azure Data Lake Storage.
+Set the Azure credentials:
 
-2. Variables: Scripts often use variables to store and manipulate data. Variables can hold different types of data, such as numbers, strings (text), booleans (true/false), or complex data structures.
+credential = DefaultAzureCredential(): This line initializes the Azure credential using the default credentials, which can be obtained from environment variables, managed identity, or Azure CLI.
+Set the Azure Data Lake Storage account and file system names:
 
-3. Control Structures: Scripts have control structures that enable conditional execution and looping. Conditional statements, such as if-else statements, allow the script to make decisions based on certain conditions. Loops, such as for loops or while loops, allow the script to repeat a set of instructions multiple times.
+storage_account_name = "your_storage_account_name"
+file_system_name = "your_file_system_name"
+Create the Data Lake Service Client:
 
-4. Functions and Methods: Scripts can define functions or use built-in methods to organize and encapsulate reusable pieces of code. Functions accept input parameters, perform specific tasks, and can return values or modify data.
+service_client = DataLakeServiceClient(account_url=f"https://{storage_account_name}.dfs.core.windows.net", credential=credential): This line creates a client object to interact with Azure Data Lake Storage using the provided account URL and credential.
+Define functions for various operations:
 
-5. File Operations: Scripts often interact with files on the computer's file system. They can read from files, write to files, create new files, or perform other file-related operations.
+create_directory(directory_path): This function creates a new directory in Azure Data Lake Storage.
+upload_file(local_file_path, remote_file_path): This function uploads a file from the local file system to Azure Data Lake Storage.
+download_file(remote_file_path, local_file_path): This function downloads a file from Azure Data Lake Storage to the local file system.
+list_files_and_directories(directory_path): This function lists all files and directories in a specified directory in Azure Data Lake Storage.
+Example usage of the functions:
 
-6. Input and Output: Scripts can accept input from users or other systems through command-line arguments, user prompts, or input files. They can also produce output by printing information to the console, writing to files, or sending data to external systems.
-
-7. Error Handling: Scripts can include error handling mechanisms to catch and handle exceptions or errors that may occur during execution. This helps ensure that the script gracefully handles unexpected situations and provides appropriate feedback or recovery options.
-
-8. Libraries and Modules: Scripts can utilize libraries or modules, which are pre-written code packages that provide additional functionality or tools. These libraries can save time by providing ready-made solutions for common tasks or integrating with external systems.
-
-9. Integration: Scripts can integrate with other systems or services through APIs (Application Programming Interfaces), web services, or network protocols. This allows scripts to interact with databases, web applications, cloud platforms, or other external resources.
-
-10. Testing and Debugging: Scripts can be tested and debugged to ensure they work correctly and are free of errors. Testing involves running the script with various inputs and verifying the expected outputs. Debugging involves
+directory_path = "your_directory_path": Specify the path for the directory you want to create.
+local_file_path = "path_to_local_file.txt": Specify the local file path for uploading or downloading.
+remote_file_path = "path_to_remote_file.txt": Specify the remote file path in Azure Data Lake Storage.
+create_directory(directory_path): This line calls the create_directory function to create a new directory in Azure Data Lake Storage.
+`upload_file(local_file_path, remote_file_path
