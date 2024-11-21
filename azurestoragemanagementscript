@@ -1,0 +1,77 @@
+import os
+from azure.identity import DefaultAzureCredential
+from azure.storage.filedatalake import DataLakeServiceClient
+
+# Set the Azure credentials
+credential = DefaultAzureCredential()
+
+# Set the Azure Data Lake Storage account name and file system name
+storage_account_name = "your_storage_account_name"
+file_system_name = "your_file_system_name"
+
+# Create the Data Lake Service Client
+service_client = DataLakeServiceClient(account_url=f"https://{storage_account_name}.dfs.core.windows.net", credential=credential)
+
+# Function to create a new directory in Azure Data Lake Storage
+def create_directory(directory_path):
+    file_system_client = service_client.get_file_system_client(file_system=file_system_name)
+    file_system_client.create_directory(directory_path)
+
+# Function to upload a file to Azure Data Lake Storage
+def upload_file(local_file_path, remote_file_path):
+    file_system_client = service_client.get_file_system_client(file_system=file_system_name)
+    file_client = file_system_client.get_file_client(remote_file_path)
+    with open(local_file_path, "rb") as local_file:
+        file_client.upload_data(local_file.read(), overwrite=True)
+
+# Function to download a file from Azure Data Lake Storage
+def download_file(remote_file_path, local_file_path):
+    file_system_client = service_client.get_file_system_client(file_system=file_system_name)
+    file_client = file_system_client.get_file_client(remote_file_path)
+    with open(local_file_path, "wb") as local_file:
+        local_file.write(file_client.download_data().readall())
+
+# Function to list all files and directories in Azure Data Lake Storage
+def list_files_and_directories(directory_path):
+    file_system_client = service_client.get_file_system_client(file_system=file_system_name)
+    directory_client = file_system_client.get_directory_client(directory_path)
+    paths = directory_client.get_paths()
+    for path in paths:
+        if path.is_directory:
+            print("Directory:", path.name)
+        else:
+            print("File:", path.name)
+
+# Example usage of the functions
+directory_path = "your_directory_path"
+local_file_path = "path_to_local_file.txt"
+remote_file_path = "path_to_remote_file.txt"
+
+create_directory(directory_path)
+upload_file(local_file_path, remote_file_path)
+download_file(remote_file_path, local_file_path)
+list_files_and_directories(directory_path)
+
+A script is a set of instructions or commands written in a specific programming language that is executed by a computer or interpreter. It is used to automate tasks, perform calculations, manipulate data, or interact with various systems and environments.
+
+Let's break down the components and processes involved in a script:
+
+1. Programming Language: A script is written in a programming language such as Python, JavaScript, Ruby, or PowerShell. Each programming language has its own syntax and rules for writing scripts.
+
+2. Variables: Scripts often use variables to store and manipulate data. Variables can hold different types of data, such as numbers, strings (text), booleans (true/false), or complex data structures.
+
+3. Control Structures: Scripts have control structures that enable conditional execution and looping. Conditional statements, such as if-else statements, allow the script to make decisions based on certain conditions. Loops, such as for loops or while loops, allow the script to repeat a set of instructions multiple times.
+
+4. Functions and Methods: Scripts can define functions or use built-in methods to organize and encapsulate reusable pieces of code. Functions accept input parameters, perform specific tasks, and can return values or modify data.
+
+5. File Operations: Scripts often interact with files on the computer's file system. They can read from files, write to files, create new files, or perform other file-related operations.
+
+6. Input and Output: Scripts can accept input from users or other systems through command-line arguments, user prompts, or input files. They can also produce output by printing information to the console, writing to files, or sending data to external systems.
+
+7. Error Handling: Scripts can include error handling mechanisms to catch and handle exceptions or errors that may occur during execution. This helps ensure that the script gracefully handles unexpected situations and provides appropriate feedback or recovery options.
+
+8. Libraries and Modules: Scripts can utilize libraries or modules, which are pre-written code packages that provide additional functionality or tools. These libraries can save time by providing ready-made solutions for common tasks or integrating with external systems.
+
+9. Integration: Scripts can integrate with other systems or services through APIs (Application Programming Interfaces), web services, or network protocols. This allows scripts to interact with databases, web applications, cloud platforms, or other external resources.
+
+10. Testing and Debugging: Scripts can be tested and debugged to ensure they work correctly and are free of errors. Testing involves running the script with various inputs and verifying the expected outputs. Debugging involves
