@@ -1,0 +1,322 @@
+# Advanced Hitachi Storage Troubleshooting Scenarios
+
+## 1. Performance Degradation Issues
+
+### Scenario 1: Sudden Drop in I/O Performance
+**Symptoms:**
+- Increased response time
+- Decreased IOPS
+- Host timeout errors
+- Application slowness
+
+**Troubleshooting Steps:**
+```text
+1. Check Current Performance Metrics
+   # performance-monitor show -interval 1
+   # cache-usage display
+   # queue-depth show -port all
+
+2. Analyze Backend Storage
+   # raid-group-monitor show
+   # drive-performance show
+   # backend-port-monitor show
+
+3. Review Front-end Port Statistics
+   # port-monitor show -interval 1
+   # port-stats display -detailed
+   # fabric-monitor show
+
+4. Resolution Steps:
+   - Identify bottlenecked components
+   - Check cache partition usage
+   - Verify host multipathing
+   - Review QoS settings
+```
+
+**Common Resolutions:**
+```text
+# Adjust Cache Partition
+cache-partition modify -name PROD_CACHE -size 256GB
+
+# Optimize Queue Depth
+port-config set -port CL1-A -queue-depth 32
+
+# Balance Workload
+lun-migrate start -source VOL_001 -target VOL_002
+```
+
+### Scenario 2: Cache Hit Ratio Problems
+**Symptoms:**
+- Low cache hit percentage
+- Increased disk I/O
+- Random performance spikes
+
+**Analysis Commands:**
+```text
+# Check Cache Statistics
+cache-monitor show -interval 5
+cache-partition-monitor show
+
+# Analyze Access Patterns
+io-trace start -lun VOL_001
+io-pattern-analyze show -lun VOL_001
+
+# Review Host I/O
+host-io-monitor show -wwn 50:06:0B:00:00:C2:62:00
+```
+
+## 2. Path and Connectivity Issues
+
+### Scenario 1: Path Failures
+**Symptoms:**
+- Path errors in host logs
+- Reduced redundancy
+- Intermittent timeouts
+
+**Investigation Process:**
+```text
+1. Check Path Status
+   # path-status show -detailed
+   # path-config verify -all
+   
+2. Verify Switch Configuration
+   # switch-port-monitor show
+   # fabric-status show
+   
+3. Review Host Connection
+   # host-group show -detailed
+   # port-connection verify
+```
+
+**Resolution Steps:**
+```text
+# Reset Problem Paths
+path-reset execute -port CL1-A
+path-restore verify
+
+# Update Path Settings
+path-config modify -type active-active
+path-config set -load-balance round-robin
+```
+
+### Scenario 2: Fabric Isolation
+**Symptoms:**
+- Storage ports offline
+- Multiple path failures
+- Zoning conflicts
+
+**Troubleshooting Commands:**
+```text
+# Verify Fabric Status
+switch-status show
+zone-config verify
+fabric-login show
+
+# Check Port Status
+port-status show -detailed
+port-error-stats show
+```
+
+## 3. Replication and Data Protection Issues
+
+### Scenario 1: Replication Lag
+**Symptoms:**
+- Increased RPO
+- Journal full warnings
+- Bandwidth constraints
+
+**Analysis Process:**
+```text
+1. Check Replication Status
+   # replication-monitor show
+   # journal-status show
+   # bandwidth-usage display
+
+2. Review Copy Progress
+   # copy-progress show
+   # differential-data show
+   
+3. Analyze Network
+   # network-stats show
+   # latency-monitor display
+```
+
+**Resolution Steps:**
+```text
+# Adjust Replication Settings
+replication-policy modify -bandwidth-limit 200MB
+journal-pool expand -size 500GB
+
+# Optimize Copy Process
+copy-pace set -moderate
+differential-resync start
+```
+
+## 4. Resource Contention Issues
+
+### Scenario 1: Processor Utilization Spikes
+**Symptoms:**
+- High MP blade usage
+- Command queuing
+- Delayed responses
+
+**Investigation Commands:**
+```text
+# Monitor Processor Usage
+mp-usage show -interval 1
+process-list show
+resource-monitor display
+
+# Check Queue Status
+command-queue show
+processing-queue monitor
+```
+
+### Scenario 2: Resource Pool Depletion
+**Symptoms:**
+- Thin provisioning warnings
+- Pool capacity alerts
+- Performance impact
+
+**Analysis Steps:**
+```text
+# Check Pool Status
+pool-status show -detailed
+pool-usage monitor
+thin-image-pool show
+
+# Review Allocation
+allocation-monitor show
+usage-trend display
+```
+
+## 5. Data Corruption Scenarios
+
+### Scenario 1: Volume Inconsistency
+**Symptoms:**
+- Checksum errors
+- Application data errors
+- Snapshot inconsistencies
+
+**Investigation Process:**
+```text
+1. Check Volume Integrity
+   # volume-check start -lun VOL_001
+   # consistency-group verify
+   
+2. Review Error Logs
+   # error-log show -detailed
+   # audit-log analyze
+   
+3. Verify Data Protection
+   # snapshot-verify execute
+   # backup-status show
+```
+
+**Recovery Steps:**
+```text
+# Restore from Snapshot
+snapshot-restore execute -snapshot SNAP_001
+consistency-check verify
+
+# Repair Volume
+volume-repair start -lun VOL_001
+volume-verify execute
+```
+
+## 6. System-Level Issues
+
+### Scenario 1: Component Failures
+**Symptoms:**
+- Hardware alerts
+- Component redundancy loss
+- Environmental warnings
+
+**Investigation Commands:**
+```text
+# Check Hardware Status
+hardware-status show
+component-monitor display
+environmental-status show
+
+# Review System Logs
+system-log analyze
+error-report generate
+```
+
+### Scenario 2: Microcode Issues
+**Symptoms:**
+- Unexpected behavior
+- Feature malfunctions
+- System alerts
+
+**Analysis Process:**
+```text
+# Verify Microcode Status
+microcode-info show
+feature-status verify
+system-config display
+
+# Check Compatibility
+compatibility-check execute
+feature-requirement verify
+```
+
+## 7. Recovery Procedures
+
+### Emergency Recovery Steps
+```text
+1. Initial Assessment
+   # system-status show
+   # error-log analyze
+   # component-check execute
+
+2. Data Protection
+   # snapshot-create emergency
+   # consistency-group freeze
+   # io-suspend execute
+
+3. Recovery Execution
+   # recovery-mode enter
+   # system-restore start
+   # verification-check execute
+
+4. Validation
+   # data-verify start
+   # path-verify execute
+   # application-check start
+```
+
+### Post-Recovery Analysis
+```text
+1. Generate Reports
+   # performance-report create
+   # error-analysis execute
+   # system-health-check show
+
+2. Preventive Measures
+   # alert-policy modify
+   # monitoring-threshold adjust
+   # backup-schedule optimize
+```
+
+## 8. Preventive Maintenance
+
+### Regular Health Checks
+```text
+# Daily Checks
+system-health verify
+performance-baseline compare
+capacity-trend analyze
+
+# Weekly Checks
+component-test execute
+path-verification run
+snapshot-consistency verify
+
+# Monthly Checks
+full-diagnostic execute
+trend-analysis generate
+capacity-planning update
+```
+
