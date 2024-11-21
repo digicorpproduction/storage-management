@@ -1,0 +1,120 @@
+! Hitachi Storage Switch Configuration Template
+! Last Updated: 2024-03-21
+! Supported Models: Brocade, Cisco MDS
+
+!--- Basic Switch Configuration ---
+switchname "HITACHI_SW_01"
+system-description "Hitachi Storage Switch"
+logging level 6
+clock timezone PST -8
+ntp server 10.1.1.1
+feature npiv
+feature fport-channel-trunk
+
+!--- VSAN Configuration ---
+vsan database
+  vsan 100 name "HITACHI_PROD"
+  vsan 200 name "HITACHI_DEV"
+
+!--- VSAN Interface Configuration ---
+vsan database
+  vsan 100 interface fc1/1-24
+  vsan 200 interface fc1/25-48
+
+!--- Port Configuration ---
+interface fc1/1-48
+  no shutdown
+  switchport rate-mode dedicated
+  switchport speed auto
+  switchport trunk mode off
+  no switchport trunk allowed vsan all
+  switchport trunk allowed vsan add 100,200
+
+!--- Production Ports (1-24) ---
+interface fc1/1-24
+  switchport mode F
+  switchport trunk mode off
+  switchport speed 32000
+  no shut
+  switchport vsan 100
+
+!--- Development Ports (25-48) ---
+interface fc1/25-48
+  switchport mode F
+  switchport trunk mode off
+  switchport speed 16000
+  no shut
+  switchport vsan 200
+
+!--- Port Channel Configuration ---
+interface port-channel 1
+  channel mode active
+  switchport trunk mode on
+  switchport trunk allowed vsan add 100
+  no shutdown
+
+interface fc1/1-4
+  channel-group 1 force
+  no shutdown
+
+!--- Zoning Configuration ---
+zone name HITACHI_PROD_1 vsan 100
+  member pwwn 50:06:0B:00:00:C2:62:00  ! Hitachi Port 1
+  member pwwn 50:06:0B:00:00:C2:62:01  ! Hitachi Port 2
+  member pwwn 21:00:00:24:FF:40:28:00  ! Host HBA 1
+
+zone name HITACHI_PROD_2 vsan 100
+  member pwwn 50:06:0B:00:00:C2:62:02  ! Hitachi Port 3
+  member pwwn 50:06:0B:00:00:C2:62:03  ! Hitachi Port 4
+  member pwwn 21:00:00:24:FF:40:28:01  ! Host HBA 2
+
+zoneset name HITACHI_PROD vsan 100
+  member HITACHI_PROD_1
+  member HITACHI_PROD_2
+
+!--- QoS Configuration ---
+qos class-map HITACHI_HIGH_PRIORITY match-any
+  match protocol fcid 0xEF0000
+
+qos policy-map HITACHI_QOS
+  class HITACHI_HIGH_PRIORITY
+    priority high
+
+!--- RSCN Configuration ---
+rscn-suppression vsan 100
+rscn-suppression vsan 200
+
+!--- FDMI Configuration ---
+fdmi suppress-updates
+
+!--- Domain Configuration ---
+fcdomain fcid database
+  vsan 100 wwn 50:06:0B:00:00:C2:62:00 fcid 0xEF0000 dynamic
+  vsan 200 wwn 50:06:0B:00:00:C2:62:01 fcid 0xEF0001 dynamic
+
+!--- Port Security ---
+port-security enable vsan 100
+port-security enable vsan 200
+
+!--- SNMP Configuration ---
+snmp-server host 10.1.1.10 traps version 2c public
+snmp-server enable traps
+snmp-server enable traps fcdomain
+snmp-server enable traps zone
+snmp-server enable traps port-security
+
+!--- Syslog Configuration ---
+logging server 10.1.1.20
+logging level kernel 3
+logging level port 6
+
+!--- Additional Security Features ---
+no ip domain-lookup
+password encryption aes
+ssh key rsa 2048
+ssh server enable
+
+!--- Save Configuration ---
+copy running-config startup-config
+
+!--- End of Configuration ---
