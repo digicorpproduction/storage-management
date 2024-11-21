@@ -1,0 +1,456 @@
+```python
+#!/usr/bin/env python3
+import paramiko
+import time
+import logging
+import sys
+from datetime import datetime
+
+class HitachiStorageManager:
+    def __init__(self, storage_ip, username, password):
+        self.storage_ip = storage_ip
+        self.username = username
+        self.password = password
+        self.ssh = None
+        self.logger = self._setup_logging()
+
+    def _setup_logging(self):
+        """Configure logging for storage operations"""
+        logger = logging.getLogger('HitachiStorage')
+        logger.setLevel(logging.INFO)
+        handler = logging.FileHandler('storage_operations.log')
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        return logger
+
+    def connect(self):
+        """Establish SSH connection to storage system"""
+        try:
+            self.ssh = paramiko.SSHClient()
+            self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self.ssh.connect(self.storage_ip, username=self.username, password=self.password)
+            self.logger.info(f"Successfully connected to storage system at {self.storage_ip}")
+        except Exception as e:
+            self.logger.error(f"Connection failed: {str(e)}")
+            raise
+
+    def configure_logical_switch(self, switch_name, vsan_id, domain_id):
+        """Configure logical switch settings"""
+        commands = [
+            f"switch-config -add {switch_name}",
+            f"switch-config -mod {switch_name} -vsan {vsan_id}",
+            f"switch-config -mod {switch_name} -domain {domain_id}",
+            "switch-config -enable"
+        ]
+        
+        for cmd in commands:
+            self._execute_command(cmd)
+            time.sleep(2)  # Wait for command completion
+        
+        self.logger.info(f"Logical switch {switch_name} configured successfully")
+
+    def upgrade_firmware(self, firmware_path):
+        """Perform firmware upgrade"""
+        try:
+            # Backup current configuration
+            self._execute_command("cfg-backup")
+            
+            # Upload firmware
+            self._upload_firmware(firmware_path)
+            
+            # Install firmware
+            self._execute_command("firmware-install -path /firmware/new_firmware")
+            
+            # Verify installation
+            self._execute_command("firmware-verify")
+            
+            self.logger.info("Firmware upgrade completed successfully")
+        except Exception as e:
+            self.logger.error(f"Firmware upgrade failed: {str(e)}")
+            raise
+
+    def configure_zoning(self, zone_name, wwpns):
+        """Configure storage zoning"""
+        try:
+            # Create new zone
+            self._execute_command(f"zonecreate {zone_name}")
+            
+            # Add WWPNs to zone
+            for wwpn in wwpns:
+                self._execute_command(f"zoneadd {zone_name} -wwpn {wwpn}")
+            
+            # Enable zoning
+            self._execute_command(f"zoneenable {zone_name}")
+            
+            # Save configuration
+            self._execute_command("cfgsave")
+            
+            self.logger.info(f"Zoning configuration for {zone_name} completed")
+        except Exception as e:
+            self.logger.error(f"Zoning configuration failed: {str(e)}")
+            raise
+
+    def configure_switch(self, switch_config):
+        """Configure switch settings"""
+        try:
+            # Basic switch configuration
+            commands = [
+                f"switchname {switch_config['name']}",
+                f"interface {switch_config['interface']}",
+                f"speed {switch_config['speed']}",
+                f"trunk {switch_config['trunk_mode']}",
+                "no shutdown"
+            ]
+            
+            for cmd in commands:
+                self._execute_command(cmd)
+            
+            # Configure port channels if specified
+            if 'port_channels' in switch_config:
+                self._configure_port_channels(switch_config['port_channels'])
+            
+            self.logger.info("Switch configuration completed successfully")
+        except Exception as e:
+            self.logger.error(f"Switch configuration failed: {str(e)}")
+            raise
+
+    def _configure_port_channels(self, port_channels):
+        """Configure port channels on switch"""
+        for pc in port_channels:
+            commands = [
+                f"interface port-channel {pc['id']}",
+                f"switchport mode {pc['mode']}",
+                f"switchport speed {pc['speed']}",
+                "no shutdown"
+            ]
+            
+            for cmd in commands:
+                self._execute_command(cmd)
+
+    def _execute_command(self, command):
+        """Execute command on storage system"""
+        if not self.ssh:
+            raise Exception("Not connected to storage system")
+            
+        stdin, stdout, stderr = self.ssh.exec_command(command)
+        error = stderr.read().decode()
+        if error:
+            raise Exception(f"Command execution failed: {error}")
+        
+        return stdout.read().decode()
+
+    def _upload_firmware(self, firmware_path):
+        """Upload firmware file to storage system"""
+        try:
+            sftp = self.ssh.open_sftp()
+            sftp.put(firmware_path, "/firmware/new_firmware")
+            sftp.close()
+        except Exception as e:
+            raise Exception(f"Firmware upload failed: {str(e)}")
+
+def main():
+    # Example configuration
+    storage_config = {
+        'ip': '192.168.1.100',
+        'username': 'admin',
+        'password': 'password',
+        'switch_config': {
+            'name': 'HITACHI_SW_01',
+            'interface': 'fc1/1-48',
+            'speed': 'auto',
+            'trunk_mode': 'on',
+            'port_channels': [
+                {'id': 1, 'mode': 'trunk', 'speed': '16g'},
+                {'id': 2, 'mode': 'trunk', 'speed': '16g'}
+            ]
+        },
+        'zones': [
+            {
+                'name': 'PROD_ZONE_1',
+                'wwpns': ['50:06:0B:00:00:C2:62:00', '50:06:0B:00:00:C2:62:01']
+            }
+        ]
+    }
+
+    # Initialize storage manager
+    storage = HitachiStorageManager(
+        storage_config['ip'],
+        storage_config['username'],
+        storage_config['password']
+    )
+
+    try:
+        # Connect to storage
+        storage.connect()
+
+        # Configure logical switch
+        storage.configure_logical_switch('LOGICAL_SW_01', 100, 1)
+
+        # Upgrade firmware
+        storage.upgrade_firmware('/path/to/firmware.bin')
+
+        # Configure zoning
+        for zone in storage_config['zones']:
+            storage.configure_zoning(zone['name'], zone['wwpns'])
+
+        # Configure switch
+        storage.configure_switch(storage_config['switch_config'])
+
+    except Exception as e:
+        print(f"Configuration failed: {str(e)}")
+        sys.exit(1)
+    finally:
+        if storage.ssh:
+            storage.ssh.close()
+
+if __name__ == "__main__":
+    main()
+
+```
+
+This comprehensive script provides functionality for managing Hitachi storage infrastructure. Here are the key components:
+
+1. Logical Switch Configuration:
+- Creates and configures logical switches
+- Sets VSAN IDs and domain IDs
+- Enables switch configuration
+
+2. Firmware Management:
+- Backs up current configuration
+- Uploads new firmware
+- Verifies installation
+- Handles errors during upgrade
+
+3. Zoning Configuration:
+- Creates new zones
+- Adds WWPNs to zones
+- Enables zoning
+- Saves configuration
+
+4. Switch Configuration:
+- Sets basic switch parameters
+- Configures interfaces
+- Manages port channels
+- Sets speeds and trunk modes
+
+Key Features:
+- Detailed logging of all operations
+- Error handling and recovery
+- Configuration backup
+- Secure SSH connectivity
+- SFTP support for firmware uploads
+
+To use this script:
+1. Install required Python packages (paramiko)
+2. Update the configuration dictionary with your environment details
+3. Ensure network connectivity to storage system
+4. Run with appropriate permissions
+
+#!/usr/bin/env python3
+import paramiko
+import time
+import logging
+import sys
+from datetime import datetime
+
+class HitachiStorageManager:
+    def __init__(self, storage_ip, username, password):
+        self.storage_ip = storage_ip
+        self.username = username
+        self.password = password
+        self.ssh = None
+        self.logger = self._setup_logging()
+
+    def _setup_logging(self):
+        """Configure logging for storage operations"""
+        logger = logging.getLogger('HitachiStorage')
+        logger.setLevel(logging.INFO)
+        handler = logging.FileHandler('storage_operations.log')
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        return logger
+
+    def connect(self):
+        """Establish SSH connection to storage system"""
+        try:
+            self.ssh = paramiko.SSHClient()
+            self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self.ssh.connect(self.storage_ip, username=self.username, password=self.password)
+            self.logger.info(f"Successfully connected to storage system at {self.storage_ip}")
+        except Exception as e:
+            self.logger.error(f"Connection failed: {str(e)}")
+            raise
+
+    def configure_logical_switch(self, switch_name, vsan_id, domain_id):
+        """Configure logical switch settings"""
+        commands = [
+            f"switch-config -add {switch_name}",
+            f"switch-config -mod {switch_name} -vsan {vsan_id}",
+            f"switch-config -mod {switch_name} -domain {domain_id}",
+            "switch-config -enable"
+        ]
+        
+        for cmd in commands:
+            self._execute_command(cmd)
+            time.sleep(2)  # Wait for command completion
+        
+        self.logger.info(f"Logical switch {switch_name} configured successfully")
+
+    def upgrade_firmware(self, firmware_path):
+        """Perform firmware upgrade"""
+        try:
+            # Backup current configuration
+            self._execute_command("cfg-backup")
+            
+            # Upload firmware
+            self._upload_firmware(firmware_path)
+            
+            # Install firmware
+            self._execute_command("firmware-install -path /firmware/new_firmware")
+            
+            # Verify installation
+            self._execute_command("firmware-verify")
+            
+            self.logger.info("Firmware upgrade completed successfully")
+        except Exception as e:
+            self.logger.error(f"Firmware upgrade failed: {str(e)}")
+            raise
+
+    def configure_zoning(self, zone_name, wwpns):
+        """Configure storage zoning"""
+        try:
+            # Create new zone
+            self._execute_command(f"zonecreate {zone_name}")
+            
+            # Add WWPNs to zone
+            for wwpn in wwpns:
+                self._execute_command(f"zoneadd {zone_name} -wwpn {wwpn}")
+            
+            # Enable zoning
+            self._execute_command(f"zoneenable {zone_name}")
+            
+            # Save configuration
+            self._execute_command("cfgsave")
+            
+            self.logger.info(f"Zoning configuration for {zone_name} completed")
+        except Exception as e:
+            self.logger.error(f"Zoning configuration failed: {str(e)}")
+            raise
+
+    def configure_switch(self, switch_config):
+        """Configure switch settings"""
+        try:
+            # Basic switch configuration
+            commands = [
+                f"switchname {switch_config['name']}",
+                f"interface {switch_config['interface']}",
+                f"speed {switch_config['speed']}",
+                f"trunk {switch_config['trunk_mode']}",
+                "no shutdown"
+            ]
+            
+            for cmd in commands:
+                self._execute_command(cmd)
+            
+            # Configure port channels if specified
+            if 'port_channels' in switch_config:
+                self._configure_port_channels(switch_config['port_channels'])
+            
+            self.logger.info("Switch configuration completed successfully")
+        except Exception as e:
+            self.logger.error(f"Switch configuration failed: {str(e)}")
+            raise
+
+    def _configure_port_channels(self, port_channels):
+        """Configure port channels on switch"""
+        for pc in port_channels:
+            commands = [
+                f"interface port-channel {pc['id']}",
+                f"switchport mode {pc['mode']}",
+                f"switchport speed {pc['speed']}",
+                "no shutdown"
+            ]
+            
+            for cmd in commands:
+                self._execute_command(cmd)
+
+    def _execute_command(self, command):
+        """Execute command on storage system"""
+        if not self.ssh:
+            raise Exception("Not connected to storage system")
+            
+        stdin, stdout, stderr = self.ssh.exec_command(command)
+        error = stderr.read().decode()
+        if error:
+            raise Exception(f"Command execution failed: {error}")
+        
+        return stdout.read().decode()
+
+    def _upload_firmware(self, firmware_path):
+        """Upload firmware file to storage system"""
+        try:
+            sftp = self.ssh.open_sftp()
+            sftp.put(firmware_path, "/firmware/new_firmware")
+            sftp.close()
+        except Exception as e:
+            raise Exception(f"Firmware upload failed: {str(e)}")
+
+def main():
+    # Example configuration
+    storage_config = {
+        'ip': '192.168.1.100',
+        'username': 'admin',
+        'password': 'password',
+        'switch_config': {
+            'name': 'HITACHI_SW_01',
+            'interface': 'fc1/1-48',
+            'speed': 'auto',
+            'trunk_mode': 'on',
+            'port_channels': [
+                {'id': 1, 'mode': 'trunk', 'speed': '16g'},
+                {'id': 2, 'mode': 'trunk', 'speed': '16g'}
+            ]
+        },
+        'zones': [
+            {
+                'name': 'PROD_ZONE_1',
+                'wwpns': ['50:06:0B:00:00:C2:62:00', '50:06:0B:00:00:C2:62:01']
+            }
+        ]
+    }
+
+    # Initialize storage manager
+    storage = HitachiStorageManager(
+        storage_config['ip'],
+        storage_config['username'],
+        storage_config['password']
+    )
+
+    try:
+        # Connect to storage
+        storage.connect()
+
+        # Configure logical switch
+        storage.configure_logical_switch('LOGICAL_SW_01', 100, 1)
+
+        # Upgrade firmware
+        storage.upgrade_firmware('/path/to/firmware.bin')
+
+        # Configure zoning
+        for zone in storage_config['zones']:
+            storage.configure_zoning(zone['name'], zone['wwpns'])
+
+        # Configure switch
+        storage.configure_switch(storage_config['switch_config'])
+
+    except Exception as e:
+        print(f"Configuration failed: {str(e)}")
+        sys.exit(1)
+    finally:
+        if storage.ssh:
+            storage.ssh.close()
+
+if __name__ == "__main__":
+    main()
