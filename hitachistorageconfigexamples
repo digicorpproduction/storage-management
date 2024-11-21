@@ -1,0 +1,255 @@
+# Hitachi Storage Configuration Examples by Use Case
+
+## 1. High-Performance Database Environment
+
+### Storage Configuration
+```text
+# RAID Configuration
+raid-group create -name DB_RG01 -type raid1 -drives 16
+raid-group create -name DB_RG02 -type raid5 -drives 8
+
+# Volume Configuration
+lun create -size 2TB -raid-group DB_RG01 -name DB_DATA01
+lun create -size 1TB -raid-group DB_RG01 -name DB_LOG01
+lun create -size 500GB -raid-group DB_RG02 -name DB_TEMP01
+
+# Host Group Configuration
+host-group create -name DB_HOST_GROUP -type windows
+host-group add-host -name DB_SERVER1 -wwpn 21:00:00:24:FF:40:28:00
+host-group add-host -name DB_SERVER2 -wwpn 21:00:00:24:FF:40:28:01
+
+# Performance Settings
+cache-partition create -name DB_CACHE -size 256GB
+lun-policy set -name DB_DATA01 -cache-partition DB_CACHE
+lun-policy set -name DB_LOG01 -cache-partition DB_CACHE -write-through
+```
+
+### Network Configuration
+```text
+# Switch Port Configuration
+interface fc1/1-8
+  switchport mode F
+  switchport speed 32000
+  switchport rate-mode dedicated
+  no shutdown
+
+# Zoning
+zone name DB_ZONE_1 vsan 100
+  member pwwn 21:00:00:24:FF:40:28:00  # Database Server 1
+  member pwwn 50:06:0B:00:00:C2:62:00  # Storage Port 1
+  member pwwn 50:06:0B:00:00:C2:62:01  # Storage Port 2
+```
+
+## 2. Virtual Machine Environment
+
+### Storage Configuration
+```text
+# RAID Configuration
+raid-group create -name VM_RG01 -type raid6 -drives 12
+raid-group create -name VM_RG02 -type raid5 -drives 8
+
+# Volume Configuration
+lun create -size 10TB -raid-group VM_RG01 -name VM_DATASTORE01
+lun create -size 5TB -raid-group VM_RG02 -name VM_DATASTORE02
+
+# Host Group Configuration
+host-group create -name ESXi_CLUSTER -type vmware
+host-group add-host -name ESXi_HOST1 -wwpn 21:00:00:24:FF:41:28:00
+host-group add-host -name ESXi_HOST2 -wwpn 21:00:00:24:FF:41:28:01
+host-group add-host -name ESXi_HOST3 -wwpn 21:00:00:24:FF:41:28:02
+
+# Performance Settings
+cache-partition create -name VM_CACHE -size 512GB
+lun-policy set -name VM_DATASTORE01 -cache-partition VM_CACHE
+```
+
+### Network Configuration
+```text
+# Switch Port Configuration
+interface fc1/9-16
+  switchport mode F
+  switchport speed 16000
+  port-channel 1
+
+# Multipathing Configuration
+path-config set -type vmware -multipath-mode round-robin
+path-config set -lun VM_DATASTORE01 -paths 8
+
+# Zoning
+zone name VM_ZONE_1 vsan 200
+  member pwwn 21:00:00:24:FF:41:28:00  # ESXi Host 1
+  member pwwn 21:00:00:24:FF:41:28:01  # ESXi Host 2
+  member pwwn 50:06:0B:00:00:C2:62:02  # Storage Port 3
+```
+
+## 3. Backup and Archive Environment
+
+### Storage Configuration
+```text
+# RAID Configuration
+raid-group create -name BACKUP_RG01 -type raid6 -drives 24
+raid-group create -name ARCHIVE_RG01 -type raid6 -drives 48
+
+# Volume Configuration
+lun create -size 20TB -raid-group BACKUP_RG01 -name BACKUP_VOL01
+lun create -size 50TB -raid-group ARCHIVE_RG01 -name ARCHIVE_VOL01
+
+# Deduplication Settings
+dedup enable -lun BACKUP_VOL01
+compression enable -lun ARCHIVE_VOL01
+
+# Snapshot Configuration
+snapshot-policy create -name BACKUP_SNAP -retention 14
+snapshot-schedule set -lun BACKUP_VOL01 -policy BACKUP_SNAP
+```
+
+### Network Configuration
+```text
+# Switch Port Configuration
+interface fc1/17-24
+  switchport mode F
+  switchport speed 8000
+  no shutdown
+
+# QoS Configuration
+qos class-map BACKUP_CLASS match-any
+  match protocol fcid 0xEF0002
+qos policy-map BACKUP_POLICY
+  class BACKUP_CLASS
+    priority low
+```
+
+## 4. High-Availability Production Environment
+
+### Storage Configuration
+```text
+# RAID Configuration
+raid-group create -name PROD_RG01 -type raid10 -drives 16
+raid-group create -name PROD_RG02 -type raid10 -drives 16
+
+# Volume Configuration
+lun create -size 5TB -raid-group PROD_RG01 -name PROD_VOL01
+lun create -size 5TB -raid-group PROD_RG02 -name PROD_VOL02
+
+# Replication Configuration
+replication-pair create -primary PROD_VOL01 -secondary PROD_VOL02
+replication-policy set -type sync -consistency enabled
+
+# Host Access
+host-group create -name PROD_SERVERS -type linux
+host-group add-host -name PROD_SRV1 -wwpn 21:00:00:24:FF:42:28:00
+host-group add-host -name PROD_SRV2 -wwpn 21:00:00:24:FF:42:28:01
+```
+
+### Network Configuration
+```text
+# Switch Port Configuration
+interface fc1/25-32
+  switchport mode F
+  switchport speed 32000
+  port-channel 2
+
+# Path Configuration
+path-config set -type active-active
+path-config set -lun PROD_VOL01 -paths 4
+path-config set -lun PROD_VOL02 -paths 4
+
+# Zoning
+zone name PROD_ZONE_1 vsan 300
+  member pwwn 21:00:00:24:FF:42:28:00  # Production Server 1
+  member pwwn 50:06:0B:00:00:C2:62:04  # Storage Port 5
+  member pwwn 50:06:0B:00:00:C2:62:05  # Storage Port 6
+```
+
+## 5. Mixed Workload Environment
+
+### Storage Configuration
+```text
+# Dynamic Tiering Configuration
+tier create -name TIER_SSD -type flash
+tier create -name TIER_SAS -type sas
+tier create -name TIER_NL -type nl-sas
+
+# Pool Configuration
+pool create -name MIXED_POOL01 -tiers TIER_SSD,TIER_SAS,TIER_NL
+pool-policy set -name MIXED_POOL01 -auto-promote enabled
+
+# Volume Configuration
+lun create -size 1TB -pool MIXED_POOL01 -name APP_VOL01
+lun create -size 2TB -pool MIXED_POOL01 -name DATA_VOL01
+
+# Performance Monitoring
+monitor-policy create -name WORKLOAD_MONITOR
+monitor-policy set -interval 5
+monitor-target add -lun APP_VOL01,DATA_VOL01
+```
+
+### Network Configuration
+```text
+# Switch Port Configuration
+interface fc1/33-40
+  switchport mode F
+  switchport speed 16000
+  no shutdown
+
+# Traffic Management
+qos enable
+qos service-policy MIXED_POLICY
+
+# VSAN Configuration
+vsan database
+  vsan 400 name "MIXED_WORKLOAD"
+  vsan 400 interface fc1/33-40
+```
+
+## 6. Critical Application Environment
+
+### Storage Configuration
+```text
+# High-Performance Configuration
+raid-group create -name APP_RG01 -type raid10 -drives 8
+raid-group create -name APP_RG02 -type raid10 -drives 8
+
+# Volume Configuration
+lun create -size 2TB -raid-group APP_RG01 -name APP_DATA01
+lun create -size 1TB -raid-group APP_RG02 -name APP_LOG01
+
+# Global-Active Device Configuration
+gad-pair create -primary APP_DATA01 -secondary APP_DATA02
+gad-policy set -type active-active -fence-level never
+
+# Performance Settings
+cache-partition create -name APP_CACHE -size 128GB
+lun-policy set -name APP_DATA01 -cache-partition APP_CACHE
+```
+
+### Network Configuration
+```text
+# Switch Port Configuration
+interface fc1/41-48
+  switchport mode F
+  switchport speed 32000
+  no shutdown
+
+# High Availability Configuration
+path-config set -type active-active
+path-config set -lun APP_DATA01 -paths 8
+path-config set -io-mode concurrent
+
+# QoS Settings
+qos class-map APP_HIGH_PRIORITY match-any
+  match protocol fcid 0xEF0003
+qos policy-map APP_QOS
+  class APP_HIGH_PRIORITY
+    priority critical
+```
+
+Each use case includes:
+- Specific RAID configurations
+- Volume settings
+- Host connectivity
+- Network configurations
+- Performance optimizations
+- QoS settings
+- Replication/backup configurations where applicable
+
